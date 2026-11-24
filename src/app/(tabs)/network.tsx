@@ -1,10 +1,13 @@
 import { useTheme } from "@/hooks/useTheme";
+import { startHosting } from "@/services/hostService";
+import { pingDevice } from "@/services/nexoraClient";
 import { Ionicons } from "@expo/vector-icons";
 import type { DiscoveredDevice } from "@modules/nexora-net";
 import * as NexoraNet from "@modules/nexora-net";
 import * as Device from "expo-device";
 import { useEffect, useRef, useState } from "react";
 import { FlatList, Pressable, Switch, Text, View } from "react-native";
+import { stopHosting } from "@/services/hostService";
 
 const PORT = 8765; // the server in step 3b will listen here
 
@@ -17,6 +20,7 @@ export default function NetworkScreen() {
   const [scanning, setScanning] = useState(false);
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [pingStatus, setPingStatus] = useState<Record<string, string>>({});
   const myName = useRef<string | null>(null);
 
   useEffect(() => {
@@ -39,7 +43,7 @@ export default function NetworkScreen() {
       failed.remove();
       NexoraNet.stopDiscovery();
       NexoraNet.stopAdvertising();
-      NexoraNet.stopServer();
+      stopHosting();
     };
   }, []);
 
@@ -47,17 +51,17 @@ export default function NetworkScreen() {
     setError(null);
     try {
       if (on) {
-        NexoraNet.startServer(PORT, deviceName);
+        startHosting(deviceName, PORT);
         myName.current = await NexoraNet.startAdvertising(deviceName, PORT);
         setVisible(true);
       } else {
         NexoraNet.stopAdvertising();
-        NexoraNet.stopServer();
+        stopHosting();
         myName.current = null;
         setVisible(false);
       }
     } catch (e) {
-      NexoraNet.stopServer();
+      stopHosting();
       setError(String(e));
       setVisible(false);
     }
@@ -80,6 +84,19 @@ export default function NetworkScreen() {
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+  };
+
+  const check = async (key: string, host: string, port: number) => {
+    setPingStatus((s) => ({ ...s, [key]: "Checking..." }));
+    try {
+      const reply = await pingDevice({ host, port });
+      setPingStatus((s) => ({ ...s, [key]: `Connected to "${reply.name}"` }));
+    } catch (e) {
+      setPingStatus((s) => ({
+        ...s,
+        [key]: `Failed: ${(e as Error).message}`,
+      }));
+    }
   };
 
   return (
@@ -107,6 +124,21 @@ export default function NetworkScreen() {
             {visible && ip && (
               <Text style={{ color: t.textMuted, fontSize: 12, marginTop: 8 }}>
                 Test in a browser: http://{ip}:{PORT}/ping
+                {visible && ip && (
+                  <Pressable
+                    onPress={() => check("self", ip, PORT)}
+                    style={{ marginTop: 10 }}
+                  >
+                    <Text style={{ color: t.primary }}>Test this phone</Text>
+                  </Pressable>
+                )}
+                {pingStatus["self"] && (
+                  <Text
+                    style={{ color: t.textMuted, fontSize: 12, marginTop: 4 }}
+                  >
+                    {pingStatus["self"]}
+                  </Text>
+                )}
               </Text>
             )}
           </Text>
@@ -159,7 +191,8 @@ export default function NetworkScreen() {
           </Text>
         }
         renderItem={({ item }) => (
-          <View
+          <Pressable
+            onPress={() => check(item.name, item.host, item.port)}
             style={{
               ...card,
               marginBottom: 8,
@@ -172,13 +205,20 @@ export default function NetworkScreen() {
               size={26}
               color={t.primary}
             />
-            <View style={{ marginLeft: 12 }}>
+            <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={{ color: t.text, fontSize: 16 }}>{item.name}</Text>
               <Text style={{ color: t.textMuted, fontSize: 12 }}>
                 {item.host}:{item.port}
               </Text>
+              {pingStatus[item.name] && (
+                <Text
+                  style={{ color: t.textMuted, fontSize: 12, marginTop: 2 }}
+                >
+                  {pingStatus[item.name]}
+                </Text>
+              )}
             </View>
-          </View>
+          </Pressable>
         )}
       />
     </View>

@@ -32,8 +32,39 @@ export function addErrorListener(cb: (e: { message: string }) => void) {
   return NexoraNet.addListener("onError", cb);
 }
 // Starts the HTTP server. Returns the port it is listening on.
-export function startServer(port: number, deviceName: string): number {
-  return NexoraNet.startServer(port, deviceName);
+export type ServerRequest = {
+  id: string;
+  method: string;
+  path: string;
+  query: Record<string, string[]>;
+  headers: Record<string, string>;
+  body: string;
+};
+
+// Starts the HTTP server. Returns the port it is listening on.
+export function startServer(port: number): number {
+  return NexoraNet.startServer(port);
+}
+
+export function respondToRequest(
+  id: string,
+  status: number,
+  body: string,
+): void {
+  NexoraNet.respondToRequest(id, status, body);
+}
+
+export function addRequestListener(cb: (r: ServerRequest) => void) {
+  return NexoraNet.addListener("onRequest", (e: any) =>
+    cb({
+      id: e.id,
+      method: e.method,
+      path: e.path,
+      query: JSON.parse(e.query),
+      headers: JSON.parse(e.headers),
+      body: e.body,
+    }),
+  );
 }
 export function stopServer(): void {
   NexoraNet.stopServer();

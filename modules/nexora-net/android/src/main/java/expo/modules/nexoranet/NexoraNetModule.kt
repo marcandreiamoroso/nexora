@@ -11,7 +11,14 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import fi.iki.elonen.NanoHTTPD
+import org.json.JSONObject
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
+private val pending = ConcurrentHashMap<String, CompletableFuture<Pair<Int, String>>>()
+private val idCounter = AtomicLong()
 private var server: NexoraServer? = null
 private const val SERVICE_TYPE = "_nexora._tcp."
 
@@ -33,18 +40,46 @@ class NexoraNetModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("NexoraNet")
 
-    Events("onDeviceFound", "onDeviceLost", "onError")
+    Events("onDeviceFound", "onDeviceLost", "onError", "onRequest")
 
     Function("getLocalIpAddress") {
       findLocalIp()
     }
 
-    Function("startServer") { port: Int, name: String ->
-      server?.stop()
-      val s = NexoraServer(port, name)
-      s.start(NanoHTTPD.SOCKET_READ_TIMEOUT, true) // true = background threads
-      server = s
-      s.listeningPort
+    Function("startServer") { port: Int ->
+  server?.stop()
+  val s = NexoraServer(port) { req ->
+    val id = idCounter.incrementAndGet().toString()
+    val future = CompletableFuture<Pair<Int, String>>()
+    pending[id] = future
+    sendEvent(
+      "onRequest",
+      bundleOf(
+        "id" to id,
+        "method" to req.method,
+        "path" to req.path,
+        "query" to JSONObject(req.query).toString(),
+        "headers" to JSONObject(req.headers).toString(),
+        "body" to req.body
+      )
+    )
+    try {
+      val (status, body) = future.get(10, TimeUnit.SECONDS)
+      HttpReply(status, body)
+    } catch (e: Exception) {
+      HttpReply(504, """{"error":"app_did_not_answer"}""")
+    } finally {
+      pending.remove(id)
+    }
+  }
+  s.start(NanoHTTPD.SOCKET_READ_TIMEOUT, true)
+  server = s
+  s.listeningPort
+}
+
+    Function("respondToRequest") { id: String, status: Int, body: String ->
+      pending[id]?.complete(Pair(status, body))
+      Unit
     }
 
     Function("stopServer") {
