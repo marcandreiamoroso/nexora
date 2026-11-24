@@ -31,3 +31,13 @@ export function addDeviceLostListener(cb: (d: { name: string }) => void) {
 export function addErrorListener(cb: (e: { message: string }) => void) {
   return NexoraNet.addListener("onError", cb);
 }
+// Starts the HTTP server. Returns the port it is listening on.
+export function startServer(port: number, deviceName: string): number {
+  return NexoraNet.startServer(port, deviceName);
+}
+export function stopServer(): void {
+  NexoraNet.stopServer();
+}
+export function isServerRunning(): boolean {
+  return NexoraNet.isServerRunning();
+}

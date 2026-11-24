@@ -1,6 +1,6 @@
 import ActionSheet from "@/components/ActionSheet";
 import TextPromptModal from "@/components/TextPromptModal";
-import { useTheme } from "@/hooks/use-theme";
+import { useTheme } from "@/hooks/useTheme";
 import {
   copyEntry,
   createFolder,

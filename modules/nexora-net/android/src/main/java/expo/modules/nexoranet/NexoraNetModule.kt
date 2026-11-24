@@ -10,7 +10,9 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import fi.iki.elonen.NanoHTTPD
 
+private var server: NexoraServer? = null
 private const val SERVICE_TYPE = "_nexora._tcp."
 
 class NexoraNetModule : Module() {
@@ -35,6 +37,23 @@ class NexoraNetModule : Module() {
 
     Function("getLocalIpAddress") {
       findLocalIp()
+    }
+
+    Function("startServer") { port: Int, name: String ->
+      server?.stop()
+      val s = NexoraServer(port, name)
+      s.start(NanoHTTPD.SOCKET_READ_TIMEOUT, true) // true = background threads
+      server = s
+      s.listeningPort
+    }
+
+    Function("stopServer") {
+      server?.stop()
+      server = null
+    }
+
+    Function("isServerRunning") {
+      server?.isAlive == true
     }
 
     AsyncFunction("startAdvertising") { name: String, port: Int, promise: Promise ->
@@ -95,11 +114,14 @@ class NexoraNetModule : Module() {
     }
 
     OnDestroy {
+      server?.stop()
       stopAdvertisingInternal()
       stopDiscoveryInternal()
       releaseLockIfIdle()
     }
   }
+
+  
 
   // ---------- helpers ----------
 

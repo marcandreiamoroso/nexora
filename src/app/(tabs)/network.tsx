@@ -1,7 +1,7 @@
-import { useTheme } from "@/hooks/use-theme";
+import { useTheme } from "@/hooks/useTheme";
+import { Ionicons } from "@expo/vector-icons";
 import type { DiscoveredDevice } from "@modules/nexora-net";
 import * as NexoraNet from "@modules/nexora-net";
-import { Ionicons } from "@expo/vector-icons";
 import * as Device from "expo-device";
 import { useEffect, useRef, useState } from "react";
 import { FlatList, Pressable, Switch, Text, View } from "react-native";
@@ -39,6 +39,7 @@ export default function NetworkScreen() {
       failed.remove();
       NexoraNet.stopDiscovery();
       NexoraNet.stopAdvertising();
+      NexoraNet.stopServer();
     };
   }, []);
 
@@ -46,14 +47,17 @@ export default function NetworkScreen() {
     setError(null);
     try {
       if (on) {
+        NexoraNet.startServer(PORT, deviceName);
         myName.current = await NexoraNet.startAdvertising(deviceName, PORT);
         setVisible(true);
       } else {
         NexoraNet.stopAdvertising();
+        NexoraNet.stopServer();
         myName.current = null;
         setVisible(false);
       }
     } catch (e) {
+      NexoraNet.stopServer();
       setError(String(e));
       setVisible(false);
     }
@@ -100,6 +104,11 @@ export default function NetworkScreen() {
         >
           <Text style={{ flex: 1, color: t.text }}>
             Visible to nearby devices
+            {visible && ip && (
+              <Text style={{ color: t.textMuted, fontSize: 12, marginTop: 8 }}>
+                Test in a browser: http://{ip}:{PORT}/ping
+              </Text>
+            )}
           </Text>
           <Switch
             value={visible}
